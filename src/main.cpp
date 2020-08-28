@@ -36,49 +36,7 @@ const char *password = "KoubaCat37"; // The password of the Wi-Fi network
 // as the current DHT reading algorithm adjusts itself to work on faster procs.
 DHT dht(DHTPIN, DHTTYPE);
 
-void testdrawchar(void)
-{
-  display.clearDisplay();
 
-  display.setTextSize(1);      // Normal 1:1 pixel scale
-  display.setTextColor(WHITE); // Draw white text
-  display.setCursor(0, 0);     // Start at top-left corner
-  display.cp437(true);         // Use full 256 char 'Code Page 437' font
-
-  // Not all the characters will fit on the display. This is normal.
-  // Library will draw what it can and the rest will be clipped.
-  for (int16_t i = 0; i < 256; i++)
-  {
-    if (i == '\n')
-      display.write(' ');
-    else
-      display.write(i);
-  }
-
-  display.display();
-  delay(2000);
-}
-
-void testdrawstyles(void)
-{
-  display.clearDisplay();
-
-  display.setTextSize(1);      // Normal 1:1 pixel scale
-  display.setTextColor(WHITE); // Draw white text
-  display.setCursor(0, 0);     // Start at top-left corner
-  display.println(F("Hello, world!"));
-
-  display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
-  display.println(3.141592);
-
-  display.setTextSize(2); // Draw 2X-scale text
-  display.setTextColor(WHITE);
-  display.print(F("0x"));
-  display.println(0xDEADBEEF, HEX);
-
-  display.display();
-  delay(2000);
-}
 
 void setup()
 {
@@ -120,13 +78,13 @@ void setup()
     delay(1000);
     Serial.print(++i);
     Serial.print(' ');
-    display.print(++i);
+    display.print(i);
     display.print(' ');
     display.display();
   }
 
   Serial.println('\n');
-  Serial.println("Connection established!");
+  Serial.println("Connected!");
   Serial.print("IP address:\t");
   Serial.println(WiFi.localIP()); // Send the IP address of the ESP8266 to the computer
 
@@ -134,8 +92,8 @@ void setup()
   display.setCursor(0, 0);     // Start at top-left corner
 
   // display.println('\n');
-  display.println("Connection established!");
-  display.println("IP address:\t");
+  display.println("Connected!");
+  display.println("IP address: ");
   display.println(WiFi.localIP()); // Send the IP address of the ESP8266 to the computer
   display.display();
 
@@ -164,6 +122,34 @@ void loop()
 {
   // Wait a few seconds between measurements.
   delay(2000);
+
+
+  // for (size_t i = 0; i < 255; i++)
+  // {
+  //   /* code */
+  // }
+  
+    for (int dim=150; dim>=0; dim-=10) {
+    display.ssd1306_command(0x81);
+    display.ssd1306_command(dim); //max 157
+    delay(50);
+    }
+  
+ 
+  for (int dim2=34; dim2>=0; dim2-=17) {
+  display.ssd1306_command(0xD9);
+  display.ssd1306_command(dim2);  //max 34
+  delay(100);
+  }
+
+
+
+    for (int dim=0; dim<=160; dim+=10) {
+    display.ssd1306_command(0x81);
+    display.ssd1306_command(dim); //max 160
+    delay(50);
+  }
+
 
   // Reading temperature or humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
@@ -210,3 +196,4 @@ void loop()
   display.print(t);
   display.display();
 }
+
