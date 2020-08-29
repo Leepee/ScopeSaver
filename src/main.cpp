@@ -36,6 +36,9 @@ bool isHidden;
 uint8_t curBss;
 uint8_t prevRssi;
 
+int rssi = 0;
+int networkIndex;
+
 const int ADC = A0;
 
 int rainSensor = 0;
@@ -50,15 +53,14 @@ int rainPercentage = 0;
 // as the current DHT reading algorithm adjusts itself to work on faster procs.
 DHT dht(DHTPIN, DHTTYPE);
 
-
 double dewPoint(double celsius, double humidity)
 {
   // (1) Saturation Vapor Pressure = ESGG(T)
   double RATIO = 373.15 / (273.15 + celsius);
   double RHS = -7.90298 * (RATIO - 1);
   RHS += 5.02808 * log10(RATIO);
-  RHS += -1.3816e-7 * (pow(10, (11.344 * (1 - 1 / RATIO ))) - 1) ;
-  RHS += 8.1328e-3 * (pow(10, (-3.49149 * (RATIO - 1))) - 1) ;
+  RHS += -1.3816e-7 * (pow(10, (11.344 * (1 - 1 / RATIO))) - 1);
+  RHS += 8.1328e-3 * (pow(10, (-3.49149 * (RATIO - 1))) - 1);
   RHS += log10(1013.246);
 
   // factor -3 is to adjust units - Vapor Pressure SVP * humidity
@@ -128,22 +130,24 @@ void setup()
   display.println(WiFi.localIP()); // Send the IP address of the ESP8266 to the computer
   display.display();
 
-  // display.display() is NOT necessary after every single drawing command,
-  // unless that's what you want...rather, you can batch up a bunch of
-  // drawing operations and then update the screen all at once by calling
-  // display.display(). These examples demonstrate both approaches...
 
-  // testdrawchar();      // Draw characters of the default font
+if (WiFi.status() == WL_CONNECTED){
 
-  // testdrawstyles();    // Draw 'stylized' characters
+  WiFi.setAutoReconnect(true);
+    
+      int netnum = WiFi.scanNetworks();
 
-  // Invert and restore display, pausing in-between
-  // display.invertDisplay(true);
-  // delay(1000);
-  // display.invertDisplay(false);
-  // delay(1000);
+    for (int i = 0; i < netnum; i++)
+    {
+      if (WiFi.SSID(i) == ssid)
+      {
+        networkIndex = i;
+        rssi = WiFi.RSSI(i);
+      }
+      
+    }
+}
 
-  // testanimate(logo_bmp, LOGO_WIDTH, LOGO_HEIGHT); // Animate bitmaps
 
   dht.begin();
 }
@@ -193,7 +197,7 @@ void loop()
   // Compute heat index in Celsius (isFahreheit = false)
   float hic = dht.computeHeatIndex(t, h, false);
 
-  double dew = dewPoint(t,h);
+  double dew = dewPoint(t, h);
 
   Serial.print(F("Humidity: "));
   Serial.print(h);
@@ -209,64 +213,78 @@ void loop()
 
   display.clearDisplay();
 
-  display.setCursor(0,0);
+  display.setCursor(0, 0);
 
-  if (WiFi.status() == WL_CONNECTED)
-  {
-    int netnum = 0;
-    WiFi.getNetworkInfo(netnum, sssid, encryptionType, RSSI, BSSID, channel, isHidden);
+  if (WiFi.status() == WL_CONNECTED){
 
-    Serial.print("Signal strength: ");
+    
+    
+    rssi = WiFi.RSSI(networkIndex);
+
+    Serial.print("Connected");
+    Serial.println(rssi);
+    //   int netnum = WiFi.scanNetworks();
+
+    // for (int i = 0; i < netnum; i++)
+    // {
+    //   if (WiFi.SSID(i) == ssid)
+    //   {
+    //     rssi = WiFi.RSSI(i);
+    //   }
+      
+    // }
+    
+
+    // WiFi.getNetworkInfo(netnum, sssid, encryptionType, RSSI, BSSID, channel, isHidden);
+
     int bars;
     //  int bars = map(RSSI,-80,-44,1,6); // this method doesn't refelct the Bars well
     // simple if then to set the number of bars
 
-    if (RSSI > -55)
-    {
-      bars = 5;
-    }
-    else if (RSSI<-55 & RSSI> - 65)
-    {
-      bars = 4;
-    }
-    else if (RSSI<-65 & RSSI> - 70)
-    {
-      bars = 3;
-    }
-    else if (RSSI<-70 & RSSI> - 78)
-    {
-      bars = 2;
-    }
-    else if (RSSI<-78 & RSSI> - 82)
-    {
-      bars = 1;
-    }
-    else
-    {
-      bars = 0;
-    }
+    if (rssi > -65) { 
+    bars = 5;
+  } else if ((rssi < -66) & (rssi > -86)) {
+    bars = 4;
+  } else if ((rssi < -87) & (rssi > -92)) {
+    bars = 3;
+  } else if ((rssi < -93) & (rssi > -101)) {
+    bars = 2;
+  } else if ((rssi < -102) & (rssi > -110)) {
+    bars = 1;
+  } else {
+    bars = 0;
+  }
 
     for (int b = 0; b <= bars; b++)
     {
-      display.fillRect(0 + (b * 5), 16 - (b * 2), 3, b * 2, WHITE);
+      display.fillRect(0 + (b * 5), 16 - (b * 3), 3, b * 3, WHITE);
     }
   }
+  else if (WiFi.status() != WL_CONNECTED){
+      display.setCursor(0,0);
+      display.setTextSize(2);
+      display.print("X");
+      display.setTextSize(1);
+  }
+
   display.setTextSize(1);      // Normal 1:1 pixel scale
   display.setTextColor(WHITE); // Draw white text
-  display.setCursor(50,0);
+  display.setCursor(50, 0);
   display.print(ssid);
-  display.setCursor(50,8);
-  display.print("Channel: ");
-  display.print(channel);
-  display.setCursor(0, 16);    // Start at top-left corner of blue
+  display.setCursor(50, 8);
+  display.print("Signal: ");
+  display.print(rssi);
+  display.setCursor(0, 16); // Start at top-left corner of blue
 
   display.print(F("Humidity: "));
   display.print(h);
   display.println("%");
   display.print(F("Temperature: "));
-  display.println(t);
+  display.print(t);
+  display.println(char(247));
   display.print("Dew Point: ");
-  display.println(dew);
+  display.print(dew);
+  display.println(char(247));
   display.println();
   display.print("Rain Level: ");
   display.print(rainPercentage);
