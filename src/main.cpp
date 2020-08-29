@@ -27,6 +27,20 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 const char *ssid = "Bellapais";      // The SSID (name) of the Wi-Fi network you want to connect to
 const char *password = "KoubaCat37"; // The password of the Wi-Fi network
 
+String sssid;
+uint8_t encryptionType;
+int32_t RSSI;
+uint8_t *BSSID;
+int32_t channel;
+bool isHidden;
+uint8_t curBss;
+uint8_t prevRssi;
+
+const int ADC = A0;
+
+int rainSensor = 0;
+int rainPercentage = 0;
+
 #define DHTPIN 0      // Digital pin connected to the DHT sensor
 #define DHTTYPE DHT22 // DHT 22  (AM2302), AM2321
 
@@ -37,14 +51,34 @@ const char *password = "KoubaCat37"; // The password of the Wi-Fi network
 DHT dht(DHTPIN, DHTTYPE);
 
 
+double dewPoint(double celsius, double humidity)
+{
+  // (1) Saturation Vapor Pressure = ESGG(T)
+  double RATIO = 373.15 / (273.15 + celsius);
+  double RHS = -7.90298 * (RATIO - 1);
+  RHS += 5.02808 * log10(RATIO);
+  RHS += -1.3816e-7 * (pow(10, (11.344 * (1 - 1 / RATIO ))) - 1) ;
+  RHS += 8.1328e-3 * (pow(10, (-3.49149 * (RATIO - 1))) - 1) ;
+  RHS += log10(1013.246);
+
+  // factor -3 is to adjust units - Vapor Pressure SVP * humidity
+  double VP = pow(10, RHS - 3) * humidity;
+
+  // (2) DEWPOINT = F(Vapor Pressure)
+  double T = log(VP / 0.61078); // temp var
+  return (241.88 * T) / (17.558 - T);
+}
 
 void setup()
 {
+
+  pinMode(ADC, INPUT);
+
   Serial.begin(115200);
 
   Serial.println('\n');
 
-    // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+  // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
   {
     Serial.println(F("SSD1306 allocation failed"));
@@ -52,15 +86,12 @@ void setup()
       ; // Don't proceed, loop forever
   }
 
-
   // Clear the buffer
   display.clearDisplay();
 
   display.setTextSize(1);      // Normal 1:1 pixel scale
   display.setTextColor(WHITE); // Draw white text
   display.setCursor(0, 0);     // Start at top-left corner
-
-
 
   WiFi.begin(ssid, password); // Connect to the network
   Serial.print("Connecting to ");
@@ -89,14 +120,13 @@ void setup()
   Serial.println(WiFi.localIP()); // Send the IP address of the ESP8266 to the computer
 
   display.clearDisplay();
-  display.setCursor(0, 0);     // Start at top-left corner
+  display.setCursor(0, 0); // Start at top-left corner
 
   // display.println('\n');
   display.println("Connected!");
   display.println("IP address: ");
   display.println(WiFi.localIP()); // Send the IP address of the ESP8266 to the computer
   display.display();
-
 
   // display.display() is NOT necessary after every single drawing command,
   // unless that's what you want...rather, you can batch up a bunch of
@@ -123,36 +153,28 @@ void loop()
   // Wait a few seconds between measurements.
   delay(2000);
 
+  //   for (int dim=150; dim>=0; dim-=10) {
+  //   display.ssd1306_command(0x81);
+  //   display.ssd1306_command(dim); //max 157
+  //   delay(50);
+  //   }
 
-  // for (size_t i = 0; i < 255; i++)
-  // {
-  //   /* code */
+  // for (int dim2=34; dim2>=0; dim2-=17) {
+  // display.ssd1306_command(0xD9);
+  // display.ssd1306_command(dim2);  //max 34
+  // delay(100);
   // }
-  
-    for (int dim=150; dim>=0; dim-=10) {
-    display.ssd1306_command(0x81);
-    display.ssd1306_command(dim); //max 157
-    delay(50);
-    }
-  
- 
-  for (int dim2=34; dim2>=0; dim2-=17) {
-  display.ssd1306_command(0xD9);
-  display.ssd1306_command(dim2);  //max 34
-  delay(100);
-  }
 
+  //   for (int dim=0; dim<=160; dim+=10) {
+  //   display.ssd1306_command(0x81);
+  //   display.ssd1306_command(dim); //max 160
+  //   delay(50);
+  // }
 
+  rainSensor = analogRead(ADC);
+  rainPercentage = map((1024 + (rainSensor * -1)), 0, 1024, 0, 100);
 
-    for (int dim=0; dim<=160; dim+=10) {
-    display.ssd1306_command(0x81);
-    display.ssd1306_command(dim); //max 160
-    delay(50);
-  }
-
-
-  // Reading temperature or humidity takes about 250 milliseconds!
-  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+  // Read Humidity
   float h = dht.readHumidity();
   // Read temperature as Celsius (the default)
   float t = dht.readTemperature();
@@ -171,6 +193,8 @@ void loop()
   // Compute heat index in Celsius (isFahreheit = false)
   float hic = dht.computeHeatIndex(t, h, false);
 
+  double dew = dewPoint(t,h);
+
   Serial.print(F("Humidity: "));
   Serial.print(h);
   Serial.print(F("%  Temperature: "));
@@ -185,15 +209,68 @@ void loop()
 
   display.clearDisplay();
 
+  display.setCursor(0,0);
+
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    int netnum = 0;
+    WiFi.getNetworkInfo(netnum, sssid, encryptionType, RSSI, BSSID, channel, isHidden);
+
+    Serial.print("Signal strength: ");
+    int bars;
+    //  int bars = map(RSSI,-80,-44,1,6); // this method doesn't refelct the Bars well
+    // simple if then to set the number of bars
+
+    if (RSSI > -55)
+    {
+      bars = 5;
+    }
+    else if (RSSI<-55 & RSSI> - 65)
+    {
+      bars = 4;
+    }
+    else if (RSSI<-65 & RSSI> - 70)
+    {
+      bars = 3;
+    }
+    else if (RSSI<-70 & RSSI> - 78)
+    {
+      bars = 2;
+    }
+    else if (RSSI<-78 & RSSI> - 82)
+    {
+      bars = 1;
+    }
+    else
+    {
+      bars = 0;
+    }
+
+    for (int b = 0; b <= bars; b++)
+    {
+      display.fillRect(0 + (b * 5), 16 - (b * 2), 3, b * 2, WHITE);
+    }
+  }
   display.setTextSize(1);      // Normal 1:1 pixel scale
   display.setTextColor(WHITE); // Draw white text
-  display.setCursor(0, 0);     // Start at top-left corner
+  display.setCursor(50,0);
+  display.print(ssid);
+  display.setCursor(50,8);
+  display.print("Channel: ");
+  display.print(channel);
+  display.setCursor(0, 16);    // Start at top-left corner of blue
 
   display.print(F("Humidity: "));
   display.print(h);
   display.println("%");
   display.print(F("Temperature: "));
-  display.print(t);
+  display.println(t);
+  display.print("Dew Point: ");
+  display.println(dew);
+  display.println();
+  display.print("Rain Level: ");
+  display.print(rainPercentage);
+  display.print(" %");
+
   display.display();
 }
-
