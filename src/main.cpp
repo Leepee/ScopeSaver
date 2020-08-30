@@ -155,7 +155,7 @@ if (WiFi.status() == WL_CONNECTED){
 void loop()
 {
   // Wait a few seconds between measurements.
-  delay(2000);
+  // delay(1000);
 
   //   for (int dim=150; dim>=0; dim-=10) {
   //   display.ssd1306_command(0x81);
@@ -215,11 +215,35 @@ void loop()
 
   display.setCursor(0, 0);
 
+  Serial.println(WiFi.status());
+
   if (WiFi.status() == WL_CONNECTED){
 
+          int netnum = WiFi.scanNetworks();
+
+    for (int i = 0; i < netnum; i++)
+    {
+      if (WiFi.SSID(i) == ssid)
+      {
+        networkIndex = i;
+        rssi = WiFi.RSSI(i);
+      }
+      
+    }
+
+
+
+
+    // Serial.println(WiFi.status());
+
+
+
+    // WiFi.getNetworkInfo(networkIndex, sssid, encryptionType, RSSI, BSSID, channel, isHidden);
+
+    // rssi = RSSI;
+
     
-    
-    rssi = WiFi.RSSI(networkIndex);
+    // rssi = WiFi.RSSI(networkIndex);
 
     Serial.print("Connected");
     Serial.println(rssi);
