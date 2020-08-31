@@ -6,12 +6,16 @@
 // - Adafruit Unified Sensor Lib: https://github.com/adafruit/Adafruit_Sensor
 
 #include "DHT.h"
-#include <ESP8266WiFi.h> // Include the Wi-Fi library
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClient.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
+
+//OLED setup vars
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 
@@ -19,14 +23,17 @@
 #define OLED_RESET -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-#define NUMFLAKES 10 // Number of snowflakes in the animation example
 
-#define LOGO_HEIGHT 16
-#define LOGO_WIDTH 16
 
-const char *ssid = "Bellapais";      // The SSID (name) of the Wi-Fi network you want to connect to
-const char *password = "KoubaCat37"; // The password of the Wi-Fi network
+//SSID and password to autoconnect on start
+const char *ssid = "Bellapais";
+const char *password = "KoubaCat37";
 
+//IFTTT server api posting vars
+const char* IFTTTServerName = "https://maker.ifttt.com/trigger/is_raining/with/key/bnt_3BpKaRR6sRJH_hIXVC";
+unsigned long lastRequest = 60000;
+
+// Vars for network speed
 String sssid;
 uint8_t encryptionType;
 int32_t RSSI;
@@ -35,12 +42,17 @@ int32_t channel;
 bool isHidden;
 uint8_t curBss;
 uint8_t prevRssi;
-
 int rssi = 0;
 int networkIndex;
 
+// Pin number for rain sesnor
 const int ADC = A0;
 
+// Weather vars
+float h;
+float t;
+float f;
+double dew;
 int rainSensor = 0;
 int rainPercentage = 0;
 
@@ -69,6 +81,133 @@ double dewPoint(double celsius, double humidity)
   // (2) DEWPOINT = F(Vapor Pressure)
   double T = log(VP / 0.61078); // temp var
   return (241.88 * T) / (17.558 - T);
+}
+
+void signalDisplay(){
+  
+  display.setCursor(0, 0);
+
+  
+  if (WiFi.status() == WL_CONNECTED)
+  {
+
+    int netnum = WiFi.scanNetworks();
+
+    for (int i = 0; i < netnum; i++)
+    {
+      if (WiFi.SSID(i) == ssid)
+      {
+        networkIndex = i;
+        rssi = WiFi.RSSI(i);
+      }
+    }
+
+    // Serial.println(WiFi.status());
+
+    // WiFi.getNetworkInfo(networkIndex, sssid, encryptionType, RSSI, BSSID, channel, isHidden);
+
+    // rssi = RSSI;
+
+    // rssi = WiFi.RSSI(networkIndex);
+
+    //   int netnum = WiFi.scanNetworks();
+
+    // for (int i = 0; i < netnum; i++)
+    // {
+    //   if (WiFi.SSID(i) == ssid)
+    //   {
+    //     rssi = WiFi.RSSI(i);
+    //   }
+
+    // }
+
+    // WiFi.getNetworkInfo(netnum, sssid, encryptionType, RSSI, BSSID, channel, isHidden);
+
+    int bars;
+    //  int bars = map(RSSI,-80,-44,1,6); // this method doesn't refelct the Bars well
+    // simple if then to set the number of bars
+
+    if (rssi > -65)
+    {
+      bars = 5;
+    }
+    else if ((rssi < -66) & (rssi > -86))
+    {
+      bars = 4;
+    }
+    else if ((rssi < -87) & (rssi > -92))
+    {
+      bars = 3;
+    }
+    else if ((rssi < -93) & (rssi > -101))
+    {
+      bars = 2;
+    }
+    else if ((rssi < -102) & (rssi > -110))
+    {
+      bars = 1;
+    }
+    else
+    {
+      bars = 0;
+    }
+
+    for (int b = 0; b <= bars; b++)
+    {
+      display.fillRect(0 + (b * 5), 16 - (b * 3), 3, b * 3, WHITE);
+    }
+  }
+  else if (WiFi.status() != WL_CONNECTED)
+  {
+    display.setCursor(0, 0);
+    display.setTextSize(2);
+    display.print("X");
+    display.setTextSize(1);
+  }
+}
+
+void rainCheck(int rainPercent)
+{
+  if (rainPercent >= 50){
+    // Make sure it was at least 1 min since last request
+    if (millis() - lastRequest >= 60000){
+    
+      HTTPClient http;
+      // Unique URL for sending POST
+      http.begin(IFTTTServerName);
+      // Add content header
+      http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+      // Data to send with POST
+      String httpRequestData = "value1=" + String(rainPercent) + "&value2=" + String(t) + "&value3=" + String(dew);
+      // Send HTTP POST req.
+      int httpResponseCode = http.POST(httpRequestData);
+      // Print result to Serial
+      Serial.print("HTTP Response code: ");
+      Serial.println(httpResponseCode);
+      // Free up resources
+      http.end();
+      // Set last request to current uptime to ensure it's not flooding the API
+      lastRequest = millis();
+
+      display.clearDisplay();
+      display.setCursor(20,0);
+      display.setTextSize(2);
+      display.println("Raining!");
+      display.setTextSize(1);
+      display.setCursor(30, (SCREEN_HEIGHT/2)-1 );
+      display.print("Sending alert");
+      display.display();
+      delay(500);
+      display.invertDisplay(true);
+      delay(500);
+      display.invertDisplay(false);
+      delay(500);
+      display.invertDisplay(true);
+      delay(500);
+      display.invertDisplay(false);
+      delay(500);
+    }
+  }
 }
 
 void setup()
@@ -178,12 +317,14 @@ void loop()
   rainSensor = analogRead(ADC);
   rainPercentage = map((1024 + (rainSensor * -1)), 0, 1024, 0, 100);
 
+  rainCheck(rainPercentage);
+
   // Read Humidity
-  float h = dht.readHumidity();
+  h = dht.readHumidity();
   // Read temperature as Celsius (the default)
-  float t = dht.readTemperature();
+  t = dht.readTemperature();
   // Read temperature as Fahrenheit (isFahrenheit = true)
-  float f = dht.readTemperature(true);
+  f = dht.readTemperature(true);
 
   // Check if any reads failed and exit early (to try again).
   if (isnan(h) || isnan(t) || isnan(f))
@@ -197,7 +338,7 @@ void loop()
   // Compute heat index in Celsius (isFahreheit = false)
   float hic = dht.computeHeatIndex(t, h, false);
 
-  double dew = dewPoint(t, h);
+  dew = dewPoint(t, h);
 
   Serial.print(F("Humidity: "));
   Serial.print(h);
@@ -213,84 +354,11 @@ void loop()
 
   display.clearDisplay();
 
-  display.setCursor(0, 0);
-
-  Serial.println(WiFi.status());
-
-  if (WiFi.status() == WL_CONNECTED){
-
-          int netnum = WiFi.scanNetworks();
-
-    for (int i = 0; i < netnum; i++)
-    {
-      if (WiFi.SSID(i) == ssid)
-      {
-        networkIndex = i;
-        rssi = WiFi.RSSI(i);
-      }
-      
-    }
+  signalDisplay();
 
 
 
-
-    // Serial.println(WiFi.status());
-
-
-
-    // WiFi.getNetworkInfo(networkIndex, sssid, encryptionType, RSSI, BSSID, channel, isHidden);
-
-    // rssi = RSSI;
-
-    
-    // rssi = WiFi.RSSI(networkIndex);
-
-    Serial.print("Connected");
-    Serial.println(rssi);
-    //   int netnum = WiFi.scanNetworks();
-
-    // for (int i = 0; i < netnum; i++)
-    // {
-    //   if (WiFi.SSID(i) == ssid)
-    //   {
-    //     rssi = WiFi.RSSI(i);
-    //   }
-      
-    // }
-    
-
-    // WiFi.getNetworkInfo(netnum, sssid, encryptionType, RSSI, BSSID, channel, isHidden);
-
-    int bars;
-    //  int bars = map(RSSI,-80,-44,1,6); // this method doesn't refelct the Bars well
-    // simple if then to set the number of bars
-
-    if (rssi > -65) { 
-    bars = 5;
-  } else if ((rssi < -66) & (rssi > -86)) {
-    bars = 4;
-  } else if ((rssi < -87) & (rssi > -92)) {
-    bars = 3;
-  } else if ((rssi < -93) & (rssi > -101)) {
-    bars = 2;
-  } else if ((rssi < -102) & (rssi > -110)) {
-    bars = 1;
-  } else {
-    bars = 0;
-  }
-
-    for (int b = 0; b <= bars; b++)
-    {
-      display.fillRect(0 + (b * 5), 16 - (b * 3), 3, b * 3, WHITE);
-    }
-  }
-  else if (WiFi.status() != WL_CONNECTED){
-      display.setCursor(0,0);
-      display.setTextSize(2);
-      display.print("X");
-      display.setTextSize(1);
-  }
-
+  
   display.setTextSize(1);      // Normal 1:1 pixel scale
   display.setTextColor(WHITE); // Draw white text
   display.setCursor(50, 0);
