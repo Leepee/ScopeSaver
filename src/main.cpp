@@ -176,9 +176,14 @@ void rainCheck(int rainPercent)
       // Unique URL for sending POST
       http.begin(IFTTTServerName);
       // Add content header
-      http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+      http.addHeader("Content-Type", "application/json");
+      // http.addHeader("Content-Type", "application/x-www-form-urlencoded");
       // Data to send with POST
-      String httpRequestData = "value1=" + String(rainPercent) + "&value2=" + String(t) + "&value3=" + String(dew);
+
+//TODODODODOD
+
+      String httpRequestData = "{\"value1\":\"" + String(random(40)) + "\",\"value2\":\"" + String(random(40)) + "\",\"value3\":\"" + String(random(40)) + "\"}";
+      // String httpRequestData = "value1=" + String(rainPercent) + "&value2=" + String(t) + "&value3=" + String(dew);
       // Send HTTP POST req.
       int httpResponseCode = http.POST(httpRequestData);
       // Print result to Serial
