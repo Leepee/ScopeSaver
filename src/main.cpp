@@ -30,8 +30,8 @@ const char *ssid = "Bellapais";
 const char *password = "KoubaCat37";
 
 //IFTTT server api posting vars
-const char* IFTTTServerName = "https://maker.ifttt.com/trigger/is_raining/with/key/bnt_3BpKaRR6sRJH_hIXVC";
-unsigned long lastRequest = 60000;
+const char* IFTTTServerName = "https://maker.ifttt.com/trigger/is_raining/with/key/cy5u-CnAtPkHkXwE71ZUFR";
+unsigned long lastRequest = -60000;
 
 // Vars for network speed
 String sssid;
@@ -127,7 +127,7 @@ void signalDisplay(){
     //  int bars = map(RSSI,-80,-44,1,6); // this method doesn't refelct the Bars well
     // simple if then to set the number of bars
 
-    if (rssi > -65)
+    if (rssi >= -66)
     {
       bars = 5;
     }
@@ -172,20 +172,21 @@ void rainCheck(int rainPercent)
     // Make sure it was at least 1 min since last request
     if (millis() - lastRequest >= 60000){
     
+      WiFiClient client;
       HTTPClient http;
       // Unique URL for sending POST
-      http.begin(IFTTTServerName);
+      http.begin(client, IFTTTServerName);
       // Add content header
       http.addHeader("Content-Type", "application/json");
       // http.addHeader("Content-Type", "application/x-www-form-urlencoded");
       // Data to send with POST
-
-//TODODODODOD
-
-      String httpRequestData = "{\"value1\":\"" + String(random(40)) + "\",\"value2\":\"" + String(random(40)) + "\",\"value3\":\"" + String(random(40)) + "\"}";
-      // String httpRequestData = "value1=" + String(rainPercent) + "&value2=" + String(t) + "&value3=" + String(dew);
+      // String httpRequestData = "{\"value1\":\"" + String(rainPercent) + "\",\"value2\":\"" + String(t) + "\",\"value3\":\"" + String(dew) + "\"}";
+      String httpRequestData = "value1=" + String(rainPercent) + "&value2=" + String(t) + "&value3=" + String(dew);
       // Send HTTP POST req.
       int httpResponseCode = http.POST(httpRequestData);
+            // int httpResponseCode = http.POST();
+            
+
       // Print result to Serial
       Serial.print("HTTP Response code: ");
       Serial.println(httpResponseCode);
