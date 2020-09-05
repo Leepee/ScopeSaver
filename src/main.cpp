@@ -13,7 +13,35 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <SoftwareSerial.h>
+#include <TinyGPS++.h>
 
+
+// GPS setup vars
+static const int RXPin = 14, TXPin = 12;
+static const uint32_t GPSBaud = 115200;
+static const int MAX_SATELLITES = 40;
+static const int PAGE_LENGTH = 40;
+
+
+// The TinyGPS++ object
+TinyGPSPlus gps;
+
+// The serial connection to the GPS device
+SoftwareSerial ss(RXPin, TXPin);
+
+TinyGPSCustom totalGPGSVMessages(gps, "GPGSV", 1); // $GPGSV sentence, first element
+TinyGPSCustom messageNumber(gps, "GPGSV", 2);      // $GPGSV sentence, second element
+TinyGPSCustom satNumber[4]; // to be initialized later
+TinyGPSCustom elevation[4];
+bool anyChanges = false;
+unsigned long linecount = 0;
+
+struct
+{
+  int elevation;
+  bool active;
+} sats[MAX_SATELLITES];
 
 //OLED setup vars
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
@@ -47,6 +75,9 @@ int networkIndex;
 
 // Pin number for rain sesnor
 const int ADC = A0;
+
+// Pin number for button
+const int button = 2;
 
 // Weather vars
 float h;
@@ -216,12 +247,37 @@ void rainCheck(int rainPercent)
   }
 }
 
+ICACHE_RAM_ATTR void buttonPressed(){
+
+    Serial.println("Button pressed");
+
+}
+
 void setup()
 {
 
   pinMode(ADC, INPUT);
+  pinMode(button, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(button), buttonPressed, FALLING);
 
   Serial.begin(115200);
+
+  // GPS testing
+
+  ss.begin(GPSBaud);
+
+  Serial.println(F("SatElevTracker.ino"));
+  Serial.println(F("Displays GPS satellite elevations as they change"));
+  Serial.print(F("Testing TinyGPS++ library v. ")); Serial.println(TinyGPSPlus::libraryVersion());
+  Serial.println(F("by Mikal Hart"));
+  Serial.println();
+  
+  // Initialize all the uninitialized TinyGPSCustom objects
+  for (int i=0; i<4; ++i)
+  {
+    satNumber[i].begin(gps, "GPGSV", 4 + 4 * i); // offsets 4, 8, 12, 16
+    elevation[i].begin(gps, "GPGSV", 5 + 4 * i); // offsets 5, 9, 13, 17
+  }
 
   Serial.println('\n');
 
