@@ -1,10 +1,3 @@
-// Example testing sketch for various DHT humidity/temperature sensors
-// Written by ladyada, public domain
-
-// REQUIRES the following Arduino libraries:
-// - DHT Sensor Library: https://github.com/adafruit/DHT-sensor-library
-// - Adafruit Unified Sensor Lib: https://github.com/adafruit/Adafruit_Sensor
-
 #include "DHT.h"
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
@@ -16,23 +9,20 @@
 #include <SoftwareSerial.h>
 #include <TinyGPS++.h>
 
-
 // GPS setup vars
 static const int RXPin = 14, TXPin = 12;
-static const uint32_t GPSBaud = 115200;
+static const uint32_t GPSBaud = 9600;
 static const int MAX_SATELLITES = 40;
 static const int PAGE_LENGTH = 40;
-
-
-// The TinyGPS++ object
-TinyGPSPlus gps;
 
 // The serial connection to the GPS device
 SoftwareSerial ss(RXPin, TXPin);
 
+// The TinyGPS++ object
+TinyGPSPlus gps;
 TinyGPSCustom totalGPGSVMessages(gps, "GPGSV", 1); // $GPGSV sentence, first element
 TinyGPSCustom messageNumber(gps, "GPGSV", 2);      // $GPGSV sentence, second element
-TinyGPSCustom satNumber[4]; // to be initialized later
+TinyGPSCustom satNumber[4];                        // to be initialized later
 TinyGPSCustom elevation[4];
 bool anyChanges = false;
 unsigned long linecount = 0;
@@ -52,13 +42,14 @@ struct
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
+int screenState = 0;
 
 //SSID and password to autoconnect on start
 const char *ssid = "Bellapais";
 const char *password = "KoubaCat37";
 
 //IFTTT server api posting vars
-const char* IFTTTServerName = "https://maker.ifttt.com/trigger/is_raining/with/key/cy5u-CnAtPkHkXwE71ZUFR";
+const char *IFTTTServerName = "https://maker.ifttt.com/trigger/is_raining/with/key/cy5u-CnAtPkHkXwE71ZUFR";
 unsigned long lastRequest = -60000;
 
 // Vars for network speed
@@ -114,11 +105,10 @@ double dewPoint(double celsius, double humidity)
   return (241.88 * T) / (17.558 - T);
 }
 
-void signalDisplay(){
-  
+ICACHE_RAM_ATTR void wifiSignalDisplay(){
+
   display.setCursor(0, 0);
 
-  
   if (WiFi.status() == WL_CONNECTED)
   {
 
@@ -197,12 +187,14 @@ void signalDisplay(){
   }
 }
 
-void rainCheck(int rainPercent)
-{
-  if (rainPercent >= 50){
+void rainCheck(int rainPercent){
+  
+  if (rainPercent >= 50)
+  {
     // Make sure it was at least 1 min since last request
-    if (millis() - lastRequest >= 60000){
-    
+    if (millis() - lastRequest >= 60000)
+    {
+
       WiFiClient client;
       HTTPClient http;
       // Unique URL for sending POST
@@ -215,8 +207,7 @@ void rainCheck(int rainPercent)
       String httpRequestData = "value1=" + String(rainPercent) + "&value2=" + String(t) + "&value3=" + String(dew);
       // Send HTTP POST req.
       int httpResponseCode = http.POST(httpRequestData);
-            // int httpResponseCode = http.POST();
-            
+      // int httpResponseCode = http.POST();
 
       // Print result to Serial
       Serial.print("HTTP Response code: ");
@@ -227,11 +218,11 @@ void rainCheck(int rainPercent)
       lastRequest = millis();
 
       display.clearDisplay();
-      display.setCursor(20,0);
+      display.setCursor(20, 0);
       display.setTextSize(2);
       display.println("Raining!");
       display.setTextSize(1);
-      display.setCursor(30, (SCREEN_HEIGHT/2)-1 );
+      display.setCursor(30, (SCREEN_HEIGHT / 2) - 1);
       display.print("Sending alert");
       display.display();
       delay(500);
@@ -247,10 +238,145 @@ void rainCheck(int rainPercent)
   }
 }
 
+ICACHE_RAM_ATTR void displayInfo()
+{
+  Serial.print(F("Location: ")); 
+  if (gps.location.isValid())
+  {
+    Serial.print(gps.location.lat(), 6);
+    Serial.print(F(","));
+    Serial.print(gps.location.lng(), 6);
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.print(F("  Date/Time: "));
+  if (gps.date.isValid())
+  {
+    Serial.print(gps.date.month());
+    Serial.print(F("/"));
+    Serial.print(gps.date.day());
+    Serial.print(F("/"));
+    Serial.print(gps.date.year());
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.print(F(" "));
+  if (gps.time.isValid())
+  {
+    if (gps.time.hour() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.hour());
+    Serial.print(F(":"));
+    if (gps.time.minute() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.minute());
+    Serial.print(F(":"));
+    if (gps.time.second() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.second());
+    Serial.print(F("."));
+    if (gps.time.centisecond() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.centisecond());
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.println();
+}
+
+ICACHE_RAM_ATTR void drawDisplay(){
+
+  display.clearDisplay();
+  wifiSignalDisplay();
+
+
+if (screenState == 0)
+{
+  // TODO: Change this for GPS signal bar
+  display.setTextSize(1);      // Normal 1:1 pixel scale
+  display.setTextColor(WHITE); // Draw white text
+  display.setCursor(50, 0);
+  display.print(ssid);
+  display.setCursor(50, 8);
+  display.print("Signal: ");
+  display.print(rssi);
+  display.setCursor(0, 24); // Start at top-left corner of blue +1 line
+
+  display.print(F("Humidity: "));
+  display.print(h);
+  display.println("%");
+  display.print(F("Temperature: "));
+  display.print(t);
+  display.println(char(247));
+  display.print("Dew Point: ");
+  display.print(dew);
+  display.println(char(247));
+  display.println();
+  display.print("Rain Level: ");
+  display.print(rainPercentage);
+  display.print(" %");
+
+  
+  
+  }else if (screenState == 1)
+  {
+      display.setCursor(0, 24); // Start at top-left corner of blue +1 line
+
+  if (gps.time.isValid()){
+    display.print(gps.date.day());
+    display.print("/");
+    display.print(gps.date.month());
+    display.print("/");
+    display.println(gps.date.year());
+  }else
+  {
+    display.println("");
+  }
+  
+  
+  
+  display.print(F("Location: ")); 
+  if (gps.location.isValid())
+    {
+      display.print(gps.location.lat(), 6);
+      display.println(F(","));
+      display.println(gps.location.lng(), 6);
+    }
+  else
+  {
+    display.println(F("Searching..."));
+  }
+
+  display.print("Altitude: ");
+  display.print(gps.altitude.meters());
+  display.println(" m");
+
+  display.print("Satellites fixed: ");
+  display.println(gps.satellites.value());
+
+  
+
+  }
+
+  display.display();
+}
+
 ICACHE_RAM_ATTR void buttonPressed(){
 
-    Serial.println("Button pressed");
-
+  if (screenState == 0)
+  {
+    screenState++;
+  }
+  else
+  {
+    screenState--;
+  }
+  // drawDisplay();
 }
 
 void setup()
@@ -266,14 +392,8 @@ void setup()
 
   ss.begin(GPSBaud);
 
-  Serial.println(F("SatElevTracker.ino"));
-  Serial.println(F("Displays GPS satellite elevations as they change"));
-  Serial.print(F("Testing TinyGPS++ library v. ")); Serial.println(TinyGPSPlus::libraryVersion());
-  Serial.println(F("by Mikal Hart"));
-  Serial.println();
-  
   // Initialize all the uninitialized TinyGPSCustom objects
-  for (int i=0; i<4; ++i)
+  for (int i = 0; i < 4; ++i)
   {
     satNumber[i].begin(gps, "GPGSV", 4 + 4 * i); // offsets 4, 8, 12, 16
     elevation[i].begin(gps, "GPGSV", 5 + 4 * i); // offsets 5, 9, 13, 17
@@ -328,15 +448,15 @@ void setup()
   // display.println('\n');
   display.println("Connected!");
   display.println("IP address: ");
-  display.println(WiFi.localIP()); // Send the IP address of the ESP8266 to the computer
+  display.println(WiFi.localIP());
   display.display();
 
+  if (WiFi.status() == WL_CONNECTED)
+  {
 
-if (WiFi.status() == WL_CONNECTED){
+    WiFi.setAutoReconnect(true);
 
-  WiFi.setAutoReconnect(true);
-    
-      int netnum = WiFi.scanNetworks();
+    int netnum = WiFi.scanNetworks();
 
     for (int i = 0; i < netnum; i++)
     {
@@ -345,36 +465,25 @@ if (WiFi.status() == WL_CONNECTED){
         networkIndex = i;
         rssi = WiFi.RSSI(i);
       }
-      
     }
-}
-
+  }
 
   dht.begin();
 }
 
 void loop()
 {
-  // Wait a few seconds between measurements.
-  // delay(1000);
 
-  //   for (int dim=150; dim>=0; dim-=10) {
-  //   display.ssd1306_command(0x81);
-  //   display.ssd1306_command(dim); //max 157
-  //   delay(50);
-  //   }
+// Check GPS sensor for new location
+  while (ss.available() > 0)
+    if (gps.encode(ss.read()))
+      displayInfo();
 
-  // for (int dim2=34; dim2>=0; dim2-=17) {
-  // display.ssd1306_command(0xD9);
-  // display.ssd1306_command(dim2);  //max 34
-  // delay(100);
-  // }
+  if (millis() > 5000 && gps.charsProcessed() < 10)
+  {
+    Serial.println(F("No GPS detected: check wiring."));
+  }
 
-  //   for (int dim=0; dim<=160; dim+=10) {
-  //   display.ssd1306_command(0x81);
-  //   display.ssd1306_command(dim); //max 160
-  //   delay(50);
-  // }
 
   rainSensor = analogRead(ADC);
   rainPercentage = map((1024 + (rainSensor * -1)), 0, 1024, 0, 100);
@@ -414,35 +523,27 @@ void loop()
   Serial.print(hif);
   Serial.println(F("°F"));
 
-  display.clearDisplay();
-
-  signalDisplay();
-
-
+  drawDisplay();
 
   
-  display.setTextSize(1);      // Normal 1:1 pixel scale
-  display.setTextColor(WHITE); // Draw white text
-  display.setCursor(50, 0);
-  display.print(ssid);
-  display.setCursor(50, 8);
-  display.print("Signal: ");
-  display.print(rssi);
-  display.setCursor(0, 16); // Start at top-left corner of blue
-
-  display.print(F("Humidity: "));
-  display.print(h);
-  display.println("%");
-  display.print(F("Temperature: "));
-  display.print(t);
-  display.println(char(247));
-  display.print("Dew Point: ");
-  display.print(dew);
-  display.println(char(247));
-  display.println();
-  display.print("Rain Level: ");
-  display.print(rainPercentage);
-  display.print(" %");
-
-  display.display();
 }
+
+
+//contrast adjustment
+  //   for (int dim=150; dim>=0; dim-=10) {
+  //   display.ssd1306_command(0x81);
+  //   display.ssd1306_command(dim); //max 157
+  //   delay(50);
+  //   }
+
+  // for (int dim2=34; dim2>=0; dim2-=17) {
+  // display.ssd1306_command(0xD9);
+  // display.ssd1306_command(dim2);  //max 34
+  // delay(100);
+  // }
+
+  //   for (int dim=0; dim<=160; dim+=10) {
+  //   display.ssd1306_command(0x81);
+  //   display.ssd1306_command(dim); //max 160
+  //   delay(50);
+  // }
